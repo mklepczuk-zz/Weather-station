@@ -4,17 +4,18 @@
 #include <BMP180.h>
 #include <BH1750.h>
 
-const char* ssid = "35246e";				//nazwa sieci Wi-Fi
-const char* password = "242536845CAYBX";	//hasło do Wi-Fi
+const char* SSID = "35246e";				//nazwa sieci Wi-Fi
+const char* PASSWORD = "242536845CAYBX";	//hasło do Wi-Fi
 const float ELEVATION = 100;				//wysokość stacji nad poziomem morza
-const long  SLEEP_DURATION = 305;			//czas uśpienia w sekundach
+const long  SLEEP_DURATION = 303;			//czas uśpienia w sekundach
 const char  IP_ADDRESS[] = "192.168.0.15";	//adres IP serwera z bazą danych
 const char  PORT = 80;						//port serwera
-const char  SQL_table[] = "JKM";			//nazwa tabeli w bazie danych
-const char  SQL_pass[] = "przecietniaka";	//hasło do bazy danych
+const char  SQL_TABLE[] = "JKM";			//nazwa tabeli w bazie danych
+const char  SQL_PASS[] = "przecietniaka";	//hasło do bazy danych
+float 		batteryVoltage = 0;         	//napięcie baterii
 
-struct weatherStationData					//struktura przechowująca dane odczytane ze stacji
-{
+struct weatherStationData					//struktura przechowująca dane odczytane
+{											//z czujników
   float pressure;          					//ciśnienie atmosferyczne w hPa
   float pressureOnTheSeaLevel;         		//ciśnienie na poziomie morza w hPa
   float temp;              					//temperatura w °C
@@ -23,45 +24,39 @@ struct weatherStationData					//struktura przechowująca dane odczytane ze stacj
   float accumulatorVoltage;              	//napięcie akumulatora
 } measuredData;              				
 
-HTU21D  myHTU21D(HTU21D_RES_RH12_TEMP14);	//inicjalizacja czujnika HTU21D
-BMP180  myBMP(BMP180_ULTRALOWPOWER);		//inicjalizacja czujnika BMP180
-BH1750  light_meter;						//inicjalizacja czujnika BH1750
+HTU21D  myHTU21D(HTU21D_RES_RH12_TEMP14);	//utworzenie obiektu HTU21D
+BMP180  myBMP180(BMP180_ULTRALOWPOWER);		//utworzenie obiektu BMP180
+BH1750  light_meter;						//utworzenie obiektu BH1750
 WiFiClient raspberry;						//inicjalizacja klienta WiFi
 
-// the setup function runs once when you press reset or power the board
-void setup(){
+void setup(){								//program główny
   Serial.begin(115200);
-  wifi_login();
-  sensors_set_up();
-  measuredData = read_data();
+  WiFi.begin(ssid, password);				//logowanie do sieci WiFi
+  sensorsSetUp();							//konfiguracja połączenia z czujnikami
+  measuredData = readData();				//odczyt danych z czujników
   //printToSerialPort(measuredData);
-  postToRPi(measuredData);
-  enterSleep(SLEEP_DURATION);
+  sendDataToRPi(measuredData);				//wyślij dane do RaspberryPi
+  goToSleep(SLEEP_DURATION);				//przejdź w stan uśpienia
 }
 
-// the loop function runs over and over again forever
-void loop()
-{}
-
-void wifi_login() {
-  WiFi.begin(ssid, password);
-  Serial.println("");
-
-  while (WiFi.status() != WL_CONNECTED) {
+void loop() {}								//nieużywane, bo mikrokontroler za każdym razem jest usypiany
+/*void wifiLogin() {
+	Serial.println("");
+	while (WiFi.status() != WL_CONNECTED){
     delay(500);
     Serial.print(".");
-   }
+	}
     Serial.println("");
     Serial.print("Connected to ");
     Serial.println(ssid);
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP());
-}
+}*/
 
-void sensors_set_up(){
+void sensorsSetUp(){						//inicjalizacja czujników
 
-  myHTU21D.begin();
-  myBMP.begin(D2, D1);
+  myHTU21D.begin();							
+  myBMP180.begin(D2, D1);					//SDA,SCL
   light_meter.begin(BH1750::ONE_TIME_HIGH_RES_MODE);
   
   /*while ( != true)
@@ -79,51 +74,47 @@ void sensors_set_up(){
   Serial.println(F("Bosch BMP180 okay"));*/
 }
 
-weatherStationData read_data(){
+weatherStationData readData(){
 
   weatherStationData tempData ={0};
-  int samples = 3;
-  float t = 0;          // temperature C
-  float h = 0;          // humidity %
-  float sp = 0;         // station pressure mb or hPa
-  float slp = 0;        // sea level pressure
-  unsigned int li = 0;  // light intensity lux
-  float cv = 0;         // cell voltage
+  int samples = 6;
+  float t = 0;          // temperatura w °C
+  float h = 0;          // wilgotność w %
+  float sp = 0;         // ciśnienie atmosferyczne w hPa
+  float slp = 0;        // ciśnienie na poziomie morza w hPa
+  unsigned int li = 0;  // natężenie oświetlenia w luxach
 
   for (int i = 0; i < samples; i++)
   {
     t = myHTU21D.readTemperature();
     h = myHTU21D.readCompensatedHumidity();
-    sp = binary_to_decimal(myBMP.getPressure());
+    sp = binaryToDecimal(myBMP180.getPressure());
     slp = calculatePressureOnTheSeaLevel(sp, ELEVATION);
     li = light_meter.readLightLevel();
-    cv = 5.0 * analogRead(A0) / 1023.0;
     
     tempData.temp += t;
     tempData.humi += h;
     tempData.pressure += sp;
     tempData.pressureOnTheSeaLevel += slp;
     tempData.sunIntensity += li;
-    tempData.cellVoltage += cv;
  
-    delay(30);   // provide some delay to let sensors settle
+    delay(30);
   }
   tempData.temp /= (float)samples;
   tempData.humi /= (float)samples;
   tempData.pressure /= (float)samples;
   tempData.pressureOnTheSeaLevel /= (float)samples;
   tempData.sunIntensity /= (long)samples;
-  tempData.cellVoltage /= (float)samples;
+  batteryVoltage = 5.0 * analogRead(A0) / 1023.0;
+  tempData.accumulatorVoltage = batteryVoltage;
  
   return tempData;
 }
 
-void postToRPi(weatherStationData data)
+void sendDataToRPi(weatherStationData data)
 {
-  // assemble and post the data
   if ( raspberry.connect(IP_ADDRESS, PORT) == true )
   {
-    Serial.println("Połączono z serwerem RPi.");
  
     raspberry.print( "GET /espdata.php?");
     raspberry.print("api_key=");
@@ -148,54 +139,52 @@ void postToRPi(weatherStationData data)
     raspberry.print( data.sunIntensity );
     raspberry.print("&&");
     raspberry.print("vl=");
-    raspberry.print( data.cellVoltage );
+    raspberry.print( data.accumulatorVoltage );
     raspberry.println( " HTTP/1.1");
     raspberry.println( "Host: localhost" );
     raspberry.println( "Content-Type: application/x-www-form-urlencoded" );
     raspberry.println( "Connection: close" );
     raspberry.println();
     raspberry.println();
-    Serial.println("Wysłano dane na serwer RPi.");
   }
   raspberry.stop();
-  Serial.println("Rozłączono z serwerem RPi.");
 }
 
-void enterSleep(long sleep)
+void goToSleep(long sleep)
 {
-  // sleep is in seconds
-  Serial.print("Wejście w tryb głębokiego snu na: ");
+  /*Serial.print("Wejście w tryb głębokiego snu na: ");
   Serial.print(sleep);
-  Serial.println(" sekund.");
-  delay(200);                       // delay to let things settle
-  // WAKE_RF_DEFAULT wakes the ESP8266 with WiFi enabled
-  ESP.deepSleep(sleep * 1000000L, WAKE_RF_DEFAULT);
+  Serial.println(" sekund.");*/
+  delay(200);                       					// delay to let things settle
+  if(batteryVoltage > 3.0)
+	ESP.deepSleep(sleep * 1000000L, WAKE_RF_DEFAULT);		// WAKE_RF_DEFAULT wakes the ESP8266 with WiFi enabled
+  else if (batteryVoltage < 3.0 and batteryVoltage > 2.9)
+	ESP.deepSleep(606000000L, WAKE_RF_DEFAULT);
+  else if (batteryVoltage < 2.9 and batteryVoltage > 2.8)
+	ESP.deepSleep(909000000L, WAKE_RF_DEFAULT);
+  else if (batteryVoltage < 2.8)
+	ESP.deepSleep(1818000000L, WAKE_RF_DEFAULT);
 }
 
 float calculatePressureOnTheSeaLevel(float pressure, float elevation)
 {
-  float slP = pressure / (pow((1-elevation/44330),5.255));
+  float slP = pressure / (pow((1-elevation/44330),5.255));	//wzór pozwalający na obliczenie ciśnienia na poziomie morza
   return slP;
 }
 
-float binary_to_decimal(int binary){
-  int t = 0;
+float binaryToDecimal(int binary){
   int wynik = 0;
-  int mask = 00000000000000001;
-  for(int i=0; i<17; i++){
-    wynik = binary & mask;
-    t += wynik;
-    mask <<= 1;
+  int mask = 00000000000000001;				//maska, która pozwala na konwersję
+  for(int i=0; i<17; i++){					//iloczyn logiczny pozwala na wydobycie wartości kolejnego
+    wynik += (binary & mask);				//bitu, który jest sumowany w każdej iteracji
+    mask <<= 1;								//przesunięcie maski, aby uzyskać wartość kolejengo bitu
   }
-  return (float)t/100.0;
+  return (float)wynik/100.0;				//wynik dzielony przez 100, aby uzyskać ciśnienie w hPa
 }
 
 void printToSerialPort(weatherStationData dataRaw)
 {
-  // '\t' is the C++ escape sequence for tab
-  // header line
   Serial.println("\t°C\t%\thPa\tSLP hPa\tLux\tV");
-  // data line
   Serial.print("Dane\t");
   Serial.print(dataRaw.temp, 2);
   Serial.print("\t");
@@ -207,6 +196,6 @@ void printToSerialPort(weatherStationData dataRaw)
   Serial.print("\t");
   Serial.print(dataRaw.sunIntensity);
   Serial.print("\t");
-  Serial.println(dataRaw.cellVoltage, 2);
+  Serial.println(dataRaw.accumulatorVoltage, 2);
   Serial.println("----------------------------------------------------");
 }
