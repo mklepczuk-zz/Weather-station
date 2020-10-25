@@ -89,8 +89,8 @@ weatherStationData readData(){
     t = myHTU21D.readTemperature();
     h = myHTU21D.readCompensatedHumidity();
     sp = binaryToDecimal(myBMP180.getPressure());
-    slp = calculatePressureOnTheSeaLevel(sp, ELEVATION);
     li = light_meter.readLightLevel();
+    slp = sp / (pow((1-ELEVATION/44330),5.255));	//wzór pozwalający na obliczenie ciśnienia na poziomie morza;
     
     tempData.temp += t;
     tempData.humi += h;
@@ -115,7 +115,6 @@ void sendDataToRPi(weatherStationData data)
 {
   if ( raspberry.connect(IP_ADDRESS, PORT) == true )
   {
- 
     raspberry.print( "GET /espdata.php?");
     raspberry.print("api_key=");
     raspberry.print( SQL_pass );
@@ -164,12 +163,6 @@ void goToSleep(long sleep)
 	ESP.deepSleep(909000000L, WAKE_RF_DEFAULT);
   else if (batteryVoltage < 2.8)
 	ESP.deepSleep(1818000000L, WAKE_RF_DEFAULT);
-}
-
-float calculatePressureOnTheSeaLevel(float pressure, float elevation)
-{
-  float slP = pressure / (pow((1-elevation/44330),5.255));	//wzór pozwalający na obliczenie ciśnienia na poziomie morza
-  return slP;
 }
 
 float binaryToDecimal(int binary){
