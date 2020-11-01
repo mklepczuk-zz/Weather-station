@@ -115,16 +115,16 @@ void sendDataToRPi(weatherStationData data)
 {
   if ( raspberry.connect(IP_ADDRESS, PORT) == true )
   {
-	String data = "GET /espdata.php?";
-	data += "api_key=" + String(SQL_PASS);
-    data += "&&station_id=" + String(SQL_TABLE);
-	data += "&&t=" + String(data.temp);
-	data += "&&h=" + String(data.humi);
-	data += "&&ap=" + String(data.pressure);
-	data += "&&rp=" + String(data.pressureOnTheSeaLevel);
-	data += "&&li=" + String(data.sunIntensity);
-	data += "&&vl=" + String(data.accumulatorVoltage);
-    raspberry.print(data);
+	String GETdata = "GET /espdata.php?";
+	GETdata += "api_key=" + String(SQL_PASS);
+    GETdata += "&&station_id=" + String(SQL_TABLE);
+	GETdata += "&&t=" + String(data.temp);
+	GETdata += "&&h=" + String(data.humi);
+	GETdata += "&&ap=" + String(data.pressure);
+	GETdata += "&&rp=" + String(data.pressureOnTheSeaLevel);
+	GETdata += "&&li=" + String(data.sunIntensity);
+	GETdata += "&&vl=" + String(data.accumulatorVoltage);
+    raspberry.print(GETdata);
     raspberry.println( " HTTP/1.1");
     raspberry.println( "Host: localhost" );
     raspberry.println( "Content-Type: application/x-www-form-urlencoded" );
