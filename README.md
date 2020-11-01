@@ -1,1 +1,2 @@
 # Weather-station
+This files are used to launch weather station on Wemos D1 mini Pro. Measured values are sent to Raspberry Pi 4, where the database is implemented. Python script is responsible for prediction of temperature for the next 24 hours.

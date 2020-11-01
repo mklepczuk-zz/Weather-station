@@ -31,7 +31,7 @@ WiFiClient raspberry;						//inicjalizacja klienta WiFi
 
 void setup(){								//program główny
   Serial.begin(115200);
-  WiFi.begin(ssid, password);				//logowanie do sieci WiFi
+  WiFi.begin(SSID, PASSWORD);				//logowanie do sieci WiFi
   sensorsSetUp();							//konfiguracja połączenia z czujnikami
   measuredData = readData();				//odczyt danych z czujników
   //printToSerialPort(measuredData);
@@ -115,30 +115,16 @@ void sendDataToRPi(weatherStationData data)
 {
   if ( raspberry.connect(IP_ADDRESS, PORT) == true )
   {
-    raspberry.print( "GET /espdata.php?");
-    raspberry.print("api_key=");
-    raspberry.print( SQL_pass );
-    raspberry.print("&&");
-    raspberry.print("station_id=");
-    raspberry.print( SQL_table );
-    raspberry.print("&&");
-    raspberry.print("t=");
-    raspberry.print( data.temp );
-    raspberry.print("&&");
-    raspberry.print("h=");
-    raspberry.print( data.humi );
-    raspberry.print("&&");
-    raspberry.print("ap=");
-    raspberry.print( data.pressure );
-    raspberry.print("&&");
-    raspberry.print("rp=");
-    raspberry.print( data.pressureOnTheSeaLevel );
-    raspberry.print("&&");
-    raspberry.print("li=");
-    raspberry.print( data.sunIntensity );
-    raspberry.print("&&");
-    raspberry.print("vl=");
-    raspberry.print( data.accumulatorVoltage );
+	String data = "GET /espdata.php?";
+	data += "api_key=" + String(SQL_PASS);
+    data += "&&station_id=" + String(SQL_TABLE);
+	data += "&&t=" + String(data.temp);
+	data += "&&h=" + String(data.humi);
+	data += "&&ap=" + String(data.pressure);
+	data += "&&rp=" + String(data.pressureOnTheSeaLevel);
+	data += "&&li=" + String(data.sunIntensity);
+	data += "&&vl=" + String(data.accumulatorVoltage);
+    raspberry.print(data);
     raspberry.println( " HTTP/1.1");
     raspberry.println( "Host: localhost" );
     raspberry.println( "Content-Type: application/x-www-form-urlencoded" );
