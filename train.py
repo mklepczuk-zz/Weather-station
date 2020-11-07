@@ -7,6 +7,7 @@ from datetime import datetime
 from datetime import timedelta
 import mysql.connector
 from sklearn import linear_model
+from sklearn.metrics import mean_absolute_error
 
 connection = mysql.connector.connect(host='localhost',
                                     database='meteo',
@@ -17,8 +18,6 @@ cursor = connection.cursor()
 cursor.execute(query)
 last = pd.DataFrame(cursor.fetchall())
 last.columns = ['timestamp','temp']
-#last.index = last.index + 1
-#last.sort_index(inplace=True)
 last['date']=pd.to_datetime(last.timestamp,errors='coerce',dayfirst=True)
 last['temp'] = pd.to_numeric(last['temp'])
 last['day'] = last['date'].dt.day
@@ -48,9 +47,7 @@ y_train = X_train['day_temp']
 del X_train['day_temp']
 regressor = linear_model.LinearRegression()
 regressor.fit(X_train, y_train)
-prediction = regressor.predict(X_test)
-X_test['predict'] = np.array(prediction)
-#X_test['predict'] = round(X_test['predict'],2)
+X_test['predict'] = np.array(regressor.predict(X_test))
 del X_test['temp']
 del X_test['mean']
 del X_test['grad_temp']
@@ -58,20 +55,9 @@ X_test['day'] +=1
 prognoza=pd.read_csv('/home/pi/prognoza/last_prognoza.csv', delimiter = ',',encoding= 'unicode_escape')
 prog = prognoza.tail(47)
 prog = prog.iloc[:24]
-#print(prog)
-#print(last_temp)
-real = last_temp['temp'].to_numpy()
-pred = prog['predict'].to_numpy()
-prednomean = prog['predictNoCorrection'].to_numpy()
-err = real - pred
-mean = err.mean()
-absmean = abs(err)
-abs_mean = absmean.mean()
-errnomean = real - prednomean
-absnomean = abs(errnomean)
-abs_meannomean = absnomean.mean()
+
+mean = (last_temp['temp'].to_numpy()-prog['predict'].to_numpy()).mean()
 prog24nomean = X_test['predict'].iloc[23]
-prog24nomean = round(prog24nomean,2)
 #print(mean)
 #print(X_test)
 if mean <= -2:
@@ -89,15 +75,15 @@ elif mean > 1 and mean < 2:
 elif mean >= 2:
 	X_test['predict'] += math.log(mean,2)*0.8 + 1
 #print(X_test['predict'])
+
 X_test['predict'] = round(X_test['predict'],2)
 prognoza = prognoza.append(X_test.iloc[23])
-prognoza.iloc[-1, prognoza.columns.get_loc('error')] = abs_mean
-prognoza.iloc[-1, prognoza.columns.get_loc('predictNoCorrection')] = prog24nomean
-prognoza.iloc[-1, prognoza.columns.get_loc('errorNoCorrection')] = abs_meannomean
+prognoza.iloc[-1, prognoza.columns.get_loc('error')] = mean_absolute_error(last_temp['temp'], prog['predict'])
+prognoza.iloc[-1, prognoza.columns.get_loc('predictNoCorrection')] = round(prog24nomean,2)
+prognoza.iloc[-1, prognoza.columns.get_loc('errorNoCorrection')] = mean_absolute_error(last_temp['temp'], prog['predictNoCorrection'])
 prognoza.to_csv("/home/pi/prognoza/last_prognoza.csv",sep=",",index=False)
 temp = prognoza.tail(50)
 his = temp.iloc[:27]
-#print(his)
 his.to_json('/var/www/html/last24hours.json',orient='records')
 prognoza.tail(24).to_json('/var/www/html/prognoza.json',orient='records')
 #X_test.to_csv('prognoza.csv', sep=',', index=False)
