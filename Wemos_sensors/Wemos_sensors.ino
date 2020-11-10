@@ -7,7 +7,7 @@
 const char* SSID = "35246e";				//nazwa sieci Wi-Fi
 const char* PASSWORD = "242536845CAYBX";	//hasło do Wi-Fi
 const float ELEVATION = 100;				//wysokość stacji nad poziomem morza
-const long  SLEEP_DURATION = 303;			//czas uśpienia w sekundach
+const long  SLEEP_DURATION = 304;			//czas uśpienia w sekundach
 const char  IP_ADDRESS[] = "192.168.0.15";	//adres IP serwera z bazą danych
 const char  PORT = 80;						//port serwera
 const char  SQL_TABLE[] = "JKM";			//nazwa tabeli w bazie danych
@@ -30,8 +30,8 @@ BH1750  light_meter;						//utworzenie obiektu BH1750
 WiFiClient raspberry;						//inicjalizacja klienta WiFi
 
 void setup(){								//program główny
-  Serial.begin(115200);
-  WiFi.begin(SSID, PASSWORD);				//logowanie do sieci WiFi
+  Serial.begin(115200);						//inicjalizacja transmisji szeregowej
+  wifiLogin();                				//logowanie do sieci WiFi
   sensorsSetUp();							//konfiguracja połączenia z czujnikami
   measuredData = readData();				//odczyt danych z czujników
   //printToSerialPort(measuredData);
@@ -40,70 +40,43 @@ void setup(){								//program główny
 }
 
 void loop() {}								//nieużywane, bo mikrokontroler za każdym razem jest usypiany
-/*void wifiLogin() {
-	Serial.println("");
-	while (WiFi.status() != WL_CONNECTED){
-    delay(500);
-    Serial.print(".");
-	}
-    Serial.println("");
-    Serial.print("Connected to ");
-    Serial.println(ssid);
-    Serial.print("IP address: ");
-    Serial.println(WiFi.localIP());
-}*/
+
+void wifiLogin() {
+  WiFi.begin(SSID, PASSWORD);        
+  while (WiFi.status() != WL_CONNECTED){
+	delay(500);
+	Serial.print(".");
+  }
+}
 
 void sensorsSetUp(){						//inicjalizacja czujników
-
   myHTU21D.begin();							
   myBMP180.begin(D2, D1);					//SDA,SCL
   light_meter.begin(BH1750::ONE_TIME_HIGH_RES_MODE);
-  
-  /*while ( != true)
-  {
-    Serial.print(F("HTU21D error"));
-    delay(5000);
-  }
-  Serial.println(F("HTU21D okay"));
-  
-  while ( != true) //sda, scl
-  {
-    Serial.println(F("Bosch BMP180 error"));
-    delay(5000);
-  }
-  Serial.println(F("Bosch BMP180 okay"));*/
 }
 
 weatherStationData readData(){
 
   weatherStationData tempData ={0};
   int samples = 6;
-  float t = 0;          // temperatura w °C
-  float h = 0;          // wilgotność w %
-  float sp = 0;         // ciśnienie atmosferyczne w hPa
-  float slp = 0;        // ciśnienie na poziomie morza w hPa
-  unsigned int li = 0;  // natężenie oświetlenia w luxach
+  float t = 0;          					//temperatura w °C
+  float h = 0;         	 					//wilgotność w %
+  unsigned int li = 0;  					//natężenie oświetlenia w luxach
 
   for (int i = 0; i < samples; i++)
   {
     t = myHTU21D.readTemperature();
     h = myHTU21D.readCompensatedHumidity();
-    sp = binaryToDecimal(myBMP180.getPressure());
     li = light_meter.readLightLevel();
-    slp = sp / (pow((1-ELEVATION/44330),5.255));	//wzór pozwalający na obliczenie ciśnienia na poziomie morza;
-    
     tempData.temp += t;
     tempData.humi += h;
-    tempData.pressure += sp;
-    tempData.pressureOnTheSeaLevel += slp;
     tempData.sunIntensity += li;
- 
     delay(30);
   }
   tempData.temp /= (float)samples;
   tempData.humi /= (float)samples;
-  tempData.pressure /= (float)samples;
-  tempData.pressureOnTheSeaLevel /= (float)samples;
+  tempData.pressure = binaryToDecimal(myBMP180.getPressure());
+  tempData.pressureOnTheSeaLevel = tempData.pressure / (pow((1-ELEVATION/44330),5.255)); //wzór pozwalający na obliczenie ciśnienia na poziomie morza
   tempData.sunIntensity /= (long)samples;
   batteryVoltage = 5.0 * analogRead(A0) / 1023.0;
   tempData.accumulatorVoltage = batteryVoltage;
@@ -117,7 +90,7 @@ void sendDataToRPi(weatherStationData data)
   {
 	String GETdata = "GET /espdata.php?";
 	GETdata += "api_key=" + String(SQL_PASS);
-    GETdata += "&&station_id=" + String(SQL_TABLE);
+	GETdata += "&&station_id=" + String(SQL_TABLE);
 	GETdata += "&&t=" + String(data.temp);
 	GETdata += "&&h=" + String(data.humi);
 	GETdata += "&&ap=" + String(data.pressure);
@@ -137,12 +110,9 @@ void sendDataToRPi(weatherStationData data)
 
 void goToSleep(long sleep)
 {
-  /*Serial.print("Wejście w tryb głębokiego snu na: ");
-  Serial.print(sleep);
-  Serial.println(" sekund.");*/
-  delay(200);                       					// delay to let things settle
+  delay(200);                       		//delay to let things settle
   if(batteryVoltage > 3.0)
-	ESP.deepSleep(sleep * 1000000L, WAKE_RF_DEFAULT);		// WAKE_RF_DEFAULT wakes the ESP8266 with WiFi enabled
+	ESP.deepSleep(sleep*1000000L,WAKE_RF_DEFAULT);	//WAKE_RF_DEFAULT wakes the ESP8266 with WiFi enabled
   else if (batteryVoltage < 3.0 and batteryVoltage > 2.9)
 	ESP.deepSleep(606000000L, WAKE_RF_DEFAULT);
   else if (batteryVoltage < 2.9 and batteryVoltage > 2.8)
@@ -155,7 +125,7 @@ float binaryToDecimal(int binary){
   int wynik = 0;
   int mask = 00000000000000001;				//maska, która pozwala na konwersję
   for(int i=0; i<17; i++){					//iloczyn logiczny pozwala na wydobycie wartości kolejnego
-    wynik += (binary & mask);				//bitu, który jest sumowany w każdej iteracji
+	wynik += (binary & mask);				//bitu, który jest sumowany w każdej iteracji
     mask <<= 1;								//przesunięcie maski, aby uzyskać wartość kolejengo bitu
   }
   return (float)wynik/100.0;				//wynik dzielony przez 100, aby uzyskać ciśnienie w hPa
@@ -163,6 +133,7 @@ float binaryToDecimal(int binary){
 
 void printToSerialPort(weatherStationData dataRaw)
 {
+  Serial.println();
   Serial.println("\t°C\t%\thPa\tSLP hPa\tLux\tV");
   Serial.print("Dane\t");
   Serial.print(dataRaw.temp, 2);
