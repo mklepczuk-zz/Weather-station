@@ -3,15 +3,12 @@
 #include <HTU21D.h>
 #include <BMP180.h>
 #include <BH1750.h>
+#include "config.h"
 
-const char* SSID = "";				//nazwa sieci Wi-Fi
-const char* PASSWORD = "";	//hasło do Wi-Fi
 const float ELEVATION = 100;				//wysokość stacji nad poziomem morza
 const long  SLEEP_DURATION = 304;			//czas uśpienia w sekundach
 const char  IP_ADDRESS[] = "192.168.0.15";	//adres IP serwera z bazą danych
 const char  PORT = 80;						//port serwera
-const char  SQL_TABLE[] = "";			//nazwa tabeli w bazie danych
-const char  SQL_PASS[] = "";	//hasło do bazy danych
 float 		batteryVoltage = 0;         	//napięcie baterii
 
 struct weatherStationData					//struktura przechowująca dane odczytane
