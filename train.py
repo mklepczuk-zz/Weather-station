@@ -3,8 +3,8 @@ import pandas as pd
 import numpy as np
 import math
 import json
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime,timedelta
+import calendar
 import mysql.connector
 from sklearn import linear_model
 from sklearn.metrics import mean_absolute_error
@@ -13,11 +13,19 @@ connection = mysql.connector.connect(host='localhost',
                                     database='meteo',
                                     user='daj_slowaka',
                                     password='walczaka')
-query = "select timestamp,temperature from JKM WHERE timestamp LIKE CONCAT(DATE_FORMAT(DATE_SUB(NOW(),INTERVAL 1 HOUR),'%Y-%m-%d %H'),'%')"
+previous_hour = 1
+temp = 2.5
+#AND temperature <="+str(temp)
+query = "select timestamp,temperature from JKM WHERE timestamp LIKE CONCAT(DATE_FORMAT(DATE_SUB(NOW(),INTERVAL "+str(previous_hour)+" HOUR),'%Y-%m-%d %H'),'%')AND temperature <="+str(temp)
 cursor = connection.cursor()
 cursor.execute(query)
 last = pd.DataFrame(cursor.fetchall())
-last.columns = ['timestamp','temp']
+if last.empty == True:
+	last_hour_date_time = datetime.now() - timedelta(hours = previous_hour)
+	d = {'timestamp': [last_hour_date_time], 'temp': [temp]}
+	last = pd.DataFrame(data=d)
+else:
+	last.columns = ['timestamp','temp']
 last['date']=pd.to_datetime(last.timestamp,errors='coerce',dayfirst=True)
 last['temp'] = pd.to_numeric(last['temp'])
 last['day'] = last['date'].dt.day
@@ -35,6 +43,7 @@ mean=pd.read_csv('/home/pi/prognoza/mean.csv', delimiter = ',',encoding= 'unicod
 df2 = pd.merge(df2,mean,how="left")
 df=df.append(df2)
 last_temp = df.tail(24)
+temp_12h = df.tail(12)
 df.to_csv("/home/pi/prognoza/train.csv",sep=",",index=False)
 df['day_temp'] = df.temp.shift(-24)
 #df['2day_temp'] = df.temp.shift(-48)\n,
@@ -49,13 +58,20 @@ regressor.fit(X_train, y_train)
 X_predict['predict'] = np.array(regressor.predict(X_predict))
 del X_predict['temp']
 del X_predict['mean']
-X_predict['day'] +=1
+if calendar.monthrange(int(X_predict['year'].iloc[23]), int(X_predict['month'].iloc[23]))[1] != X_predict['day'].iloc[23]:
+	X_predict['day'] += 1
+else:
+	X_predict['day'] = 1
+	X_predict['month'] += 1
 prog24nomean = X_predict['predict'].iloc[23]
 
 prognoza=pd.read_csv('/home/pi/prognoza/last_prognoza.csv', delimiter = ',',encoding= 'unicode_escape')
 prog = prognoza.tail(47)
 prog = prog.iloc[:24]
-mean = (last_temp['temp'].to_numpy()-prog['predict'].to_numpy()).mean()
+prog12 = prog.iloc[12:24]
+#print(temp_12h)
+#print(prog12)
+mean = (temp_12h['temp'].to_numpy()-prog12['predict'].to_numpy()).mean()
 #print(mean)
 #print(X_predict)
 if mean <= -2:

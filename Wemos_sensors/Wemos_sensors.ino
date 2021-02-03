@@ -47,8 +47,8 @@ void wifiLogin() {
 }
 
 void sensorsSetUp(){						//inicjalizacja czujników
-  myHTU21D.begin();							
-  myBMP180.begin(D2,D1);					//SDA,SCL
+  myHTU21D.begin(D6,D5);							
+  myBMP180.begin(D6,D5);					//SDA,SCL
   light_meter.begin(BH1750::ONE_TIME_HIGH_RES_MODE);
 }
 
@@ -72,9 +72,9 @@ weatherStationData readData(){
   }
   tempData.temp /= (float)samples;
   tempData.humi /= (float)samples;
-  tempData.pressure = binaryToDecimal(myBMP180.getPressure());
-  tempData.pressureOnTheSeaLevel = tempData.pressure / (pow((1-ELEVATION/44330),5.255)); //wzór pozwalający na obliczenie ciśnienia na poziomie morza
   tempData.sunIntensity /= (long)samples;
+  tempData.pressure = binaryToDecimal(myBMP180.getPressure());
+  tempData.pressureOnTheSeaLevel = tempData.pressure / (pow((1-ELEVATION/44330),5.255)); //obliczenie ciśnienia na poziomie morza
   batteryVoltage = 5.0 * analogRead(A0) / 1023.0;
   tempData.accumulatorVoltage = batteryVoltage;
  
